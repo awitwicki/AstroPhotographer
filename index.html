@@ -1,0 +1,1204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>AstroClicker - Astrophotography Clicker Game</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Space+Mono:wght@400;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  :root {
+    --neon-blue: #00d4ff;
+    --neon-pink: #ff006e;
+    --neon-green: #39ff14;
+    --neon-yellow: #ffe600;
+    --neon-orange: #ff6600;
+    --dark-bg: #0a0a1a;
+    --panel-bg: rgba(10, 10, 40, 0.85);
+  }
+
+  body {
+    font-family: 'Space Mono', monospace;
+    background: var(--dark-bg);
+    color: #e0e0ff;
+    overflow: hidden;
+    height: 100dvh;
+    width: 100vw;
+    position: relative;
+  }
+
+  /* ── Starfield ── */
+  #starfield {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    z-index: 0; pointer-events: none;
+  }
+
+  /* ── Main Layout ── */
+  #game {
+    position: relative; z-index: 1;
+    display: flex; flex-direction: column;
+    height: 100dvh; width: 100%;
+    max-width: 500px; margin: 0 auto;
+  }
+
+  /* ── Top Bar ── */
+  #topbar {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 12px;
+    background: var(--panel-bg);
+    border-bottom: 1px solid rgba(0, 212, 255, 0.3);
+    flex-shrink: 0;
+  }
+  #topbar .stat {
+    text-align: center; font-size: 11px;
+  }
+  #topbar .stat .val {
+    font-family: 'Orbitron', monospace;
+    font-weight: 700; font-size: 16px;
+    color: var(--neon-blue);
+  }
+  #topbar .stat .label {
+    font-size: 9px; opacity: 0.6; text-transform: uppercase;
+  }
+
+  /* ── Viewfinder ── */
+  #viewfinder-wrap {
+    flex: 1; position: relative;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden; min-height: 0;
+  }
+  #viewfinder {
+    width: 90%; max-width: 380px; aspect-ratio: 1;
+    border: 2px solid rgba(0, 212, 255, 0.4);
+    border-radius: 50%;
+    position: relative;
+    cursor: pointer;
+    background: radial-gradient(circle, rgba(5,5,30,1) 0%, rgba(0,0,10,1) 100%);
+    box-shadow: 0 0 40px rgba(0, 212, 255, 0.1), inset 0 0 60px rgba(0,0,30,0.8);
+    overflow: hidden;
+    transition: border-color 0.3s;
+  }
+  #viewfinder:active {
+    border-color: var(--neon-green);
+  }
+  #viewfinder .crosshair {
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 40px; height: 40px;
+    pointer-events: none;
+  }
+  #viewfinder .crosshair::before, #viewfinder .crosshair::after {
+    content: ''; position: absolute; background: rgba(255,0,0,0.5);
+  }
+  #viewfinder .crosshair::before {
+    width: 1px; height: 100%; left: 50%; top: 0;
+  }
+  #viewfinder .crosshair::after {
+    width: 100%; height: 1px; top: 50%; left: 0;
+  }
+
+  /* ── Target DSO ── */
+  #target-dso {
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 80px; height: 80px;
+    border-radius: 50%;
+    pointer-events: none;
+    transition: opacity 0.5s, filter 0.5s;
+  }
+  #dso-label {
+    position: absolute; bottom: 12%; left: 50%;
+    transform: translateX(-50%);
+    font-family: 'Orbitron', monospace;
+    font-size: 11px; color: var(--neon-yellow);
+    text-shadow: 0 0 8px rgba(255,230,0,0.5);
+    pointer-events: none; white-space: nowrap;
+  }
+  #exposure-bar-wrap {
+    position: absolute; bottom: 6%; left: 50%;
+    transform: translateX(-50%);
+    width: 60%; height: 6px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 3px; overflow: hidden;
+    pointer-events: none;
+  }
+  #exposure-bar {
+    width: 0%; height: 100%;
+    background: linear-gradient(90deg, var(--neon-blue), var(--neon-green));
+    border-radius: 3px;
+    transition: width 0.15s;
+  }
+
+  /* ── Weather overlay ── */
+  #clouds-overlay {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none; opacity: 0;
+    background:
+      radial-gradient(ellipse 120px 80px at 30% 30%, rgba(100,100,120,0.9), transparent),
+      radial-gradient(ellipse 150px 90px at 60% 50%, rgba(90,90,110,0.85), transparent),
+      radial-gradient(ellipse 100px 70px at 80% 25%, rgba(110,110,130,0.8), transparent),
+      radial-gradient(ellipse 130px 85px at 20% 70%, rgba(95,95,115,0.8), transparent);
+    transition: opacity 1s;
+    z-index: 5;
+    border-radius: 50%;
+  }
+
+  #rain-overlay {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none; opacity: 0;
+    z-index: 6; border-radius: 50%;
+    overflow: hidden;
+  }
+
+  /* ── Guiding error ── */
+  #guiding-indicator {
+    position: absolute; top: 8px; right: 8px;
+    font-size: 10px; padding: 3px 8px;
+    border-radius: 10px;
+    background: rgba(0,200,0,0.2);
+    color: var(--neon-green);
+    pointer-events: none;
+    transition: all 0.3s;
+    z-index: 10;
+  }
+  #guiding-indicator.error {
+    background: rgba(255,0,0,0.3);
+    color: var(--neon-pink);
+    animation: blink 0.5s infinite;
+  }
+
+  /* ── WiFi indicator ── */
+  #wifi-indicator {
+    position: absolute; top: 8px; left: 8px;
+    font-size: 10px; padding: 3px 8px;
+    border-radius: 10px;
+    background: rgba(0,200,0,0.2);
+    color: var(--neon-green);
+    pointer-events: none;
+    transition: all 0.3s;
+    z-index: 10;
+  }
+  #wifi-indicator.error {
+    background: rgba(255,0,0,0.3);
+    color: var(--neon-pink);
+    animation: blink 0.5s infinite;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; } 50% { opacity: 0.4; }
+  }
+
+  /* ── Problem popup buttons ── */
+  .problem-btn {
+    position: absolute; z-index: 20;
+    padding: 8px 14px;
+    border: 2px solid var(--neon-pink);
+    border-radius: 12px;
+    background: rgba(255, 0, 110, 0.2);
+    color: #fff;
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    cursor: pointer;
+    animation: popIn 0.3s ease-out, wobble 2s infinite 0.3s;
+    white-space: nowrap;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+  }
+  .problem-btn:active {
+    transform: scale(0.9);
+    background: rgba(255, 0, 110, 0.5);
+  }
+
+  @keyframes popIn {
+    0% { transform: scale(0); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  @keyframes wobble {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(-2deg); }
+    75% { transform: rotate(2deg); }
+  }
+
+  /* ── Event Log ── */
+  #event-log {
+    height: 50px; flex-shrink: 0;
+    overflow: hidden; padding: 4px 12px;
+    background: var(--panel-bg);
+    border-top: 1px solid rgba(0, 212, 255, 0.15);
+    border-bottom: 1px solid rgba(0, 212, 255, 0.15);
+    display: flex; flex-direction: column-reverse;
+    font-size: 10px; line-height: 1.6;
+    color: rgba(200, 200, 255, 0.6);
+  }
+  .log-entry { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .log-entry.bad { color: var(--neon-pink); }
+  .log-entry.good { color: var(--neon-green); }
+  .log-entry.great { color: var(--neon-yellow); }
+
+  /* ── Bottom Panel: Upgrades ── */
+  #bottom-panel {
+    flex-shrink: 0;
+    padding: 6px 8px 12px;
+    background: var(--panel-bg);
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  #upgrades-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 10px; text-transform: uppercase;
+    color: rgba(200, 200, 255, 0.4);
+    text-align: center; letter-spacing: 2px;
+  }
+  #upgrades {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+  }
+  .upgrade-btn {
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 6px 2px;
+    border: 1px solid rgba(0, 212, 255, 0.3);
+    border-radius: 8px;
+    background: rgba(0, 20, 60, 0.6);
+    color: #c0c0ff;
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+  }
+  .upgrade-btn .icon { font-size: 20px; margin-bottom: 2px; }
+  .upgrade-btn .name { font-size: 8px; opacity: 0.7; }
+  .upgrade-btn .cost {
+    font-family: 'Orbitron', monospace;
+    font-size: 10px; color: var(--neon-yellow);
+    margin-top: 1px;
+  }
+  .upgrade-btn .level {
+    font-size: 7px; color: var(--neon-blue); opacity: 0.6;
+  }
+  .upgrade-btn:active { transform: scale(0.95); }
+  .upgrade-btn:disabled {
+    opacity: 0.3; cursor: not-allowed;
+  }
+  .upgrade-btn.affordable {
+    border-color: var(--neon-green);
+    box-shadow: 0 0 8px rgba(57, 255, 20, 0.2);
+  }
+
+  /* ── Floating text ── */
+  .float-text {
+    position: absolute; pointer-events: none;
+    font-family: 'Orbitron', monospace;
+    font-weight: 700; font-size: 18px;
+    color: var(--neon-green);
+    text-shadow: 0 0 8px rgba(57, 255, 20, 0.8);
+    z-index: 30;
+    animation: floatUp 1s ease-out forwards;
+  }
+  .float-text.crit {
+    font-size: 26px; color: var(--neon-yellow);
+    text-shadow: 0 0 12px rgba(255, 230, 0, 0.8);
+  }
+  .float-text.fail {
+    color: var(--neon-pink); font-size: 14px;
+    text-shadow: 0 0 8px rgba(255, 0, 110, 0.8);
+  }
+
+  @keyframes floatUp {
+    0% { transform: translateY(0) scale(1); opacity: 1; }
+    100% { transform: translateY(-60px) scale(0.5); opacity: 0; }
+  }
+
+  /* ── Gallery / Completion popup ── */
+  #gallery-popup {
+    display: none;
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    z-index: 100;
+    background: rgba(0,0,0,0.9);
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    text-align: center;
+  }
+  #gallery-popup.show { display: flex; }
+  #gallery-popup h2 {
+    font-family: 'Orbitron', monospace;
+    color: var(--neon-yellow);
+    font-size: 20px;
+    margin-bottom: 10px;
+    text-shadow: 0 0 20px rgba(255, 230, 0, 0.5);
+  }
+  #gallery-popup .captured-img {
+    width: 180px; height: 180px;
+    border-radius: 50%;
+    border: 3px solid var(--neon-blue);
+    margin: 10px;
+    box-shadow: 0 0 30px rgba(0, 212, 255, 0.3);
+    object-fit: cover;
+  }
+  #gallery-popup p {
+    color: rgba(200, 200, 255, 0.7);
+    font-size: 12px; margin: 8px 0;
+  }
+  #gallery-popup button {
+    margin-top: 15px;
+    padding: 12px 30px;
+    border: 2px solid var(--neon-blue);
+    border-radius: 25px;
+    background: rgba(0, 212, 255, 0.15);
+    color: var(--neon-blue);
+    font-family: 'Orbitron', monospace;
+    font-size: 14px;
+    cursor: pointer;
+  }
+
+  /* ── Gallery grid ── */
+  #gallery-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 8px; max-width: 320px; margin: 10px auto;
+    max-height: 40vh; overflow-y: auto;
+  }
+  .gallery-thumb {
+    aspect-ratio: 1; border-radius: 8px;
+    border: 1px solid rgba(0,212,255,0.3);
+    overflow: hidden; position: relative;
+    background: #0a0a2a;
+  }
+  .gallery-thumb canvas {
+    width: 100%; height: 100%;
+  }
+  .gallery-thumb .thumb-label {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    background: rgba(0,0,0,0.7);
+    font-size: 7px; padding: 2px; text-align: center;
+    color: var(--neon-yellow);
+    font-family: 'Orbitron', monospace;
+  }
+
+  /* ── Rain drops ── */
+  .raindrop {
+    position: absolute;
+    width: 2px;
+    background: linear-gradient(to bottom, transparent, rgba(150, 180, 255, 0.6));
+    pointer-events: none;
+    animation: rain-fall linear infinite;
+  }
+  @keyframes rain-fall {
+    0% { transform: translateY(-20px); opacity: 0; }
+    10% { opacity: 1; }
+    100% { transform: translateY(400px); opacity: 0; }
+  }
+
+  /* ── Star twinkle in viewfinder ── */
+  .vf-star {
+    position: absolute; border-radius: 50%;
+    background: white;
+    pointer-events: none;
+    animation: twinkle 3s infinite;
+  }
+  @keyframes twinkle {
+    0%, 100% { opacity: 0.3; } 50% { opacity: 1; }
+  }
+
+  /* ── Shake for guiding error ── */
+  @keyframes shake {
+    0%, 100% { transform: translate(-50%, -50%); }
+    10% { transform: translate(-48%, -52%); }
+    20% { transform: translate(-52%, -48%); }
+    30% { transform: translate(-49%, -51%); }
+    40% { transform: translate(-51%, -49%); }
+    50% { transform: translate(-50%, -52%); }
+    60% { transform: translate(-48%, -50%); }
+    70% { transform: translate(-52%, -51%); }
+    80% { transform: translate(-50%, -48%); }
+    90% { transform: translate(-51%, -50%); }
+  }
+  #target-dso.shaking {
+    animation: shake 0.5s infinite;
+  }
+
+  /* ── Responsive ── */
+  @media (min-width: 768px) {
+    #game { max-width: 440px; }
+    #topbar .stat .val { font-size: 18px; }
+    .upgrade-btn .icon { font-size: 24px; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="starfield"></canvas>
+
+<div id="game">
+  <!-- Top Bar -->
+  <div id="topbar">
+    <div class="stat">
+      <div class="val" id="photons-display">0</div>
+      <div class="label">Photons</div>
+    </div>
+    <div class="stat">
+      <div class="val" id="pps-display">0</div>
+      <div class="label">Per Sec</div>
+    </div>
+    <div class="stat">
+      <div class="val" id="gallery-count">0/0</div>
+      <div class="label">Gallery</div>
+    </div>
+    <div class="stat">
+      <div class="val" id="night-display">1</div>
+      <div class="label">Night</div>
+    </div>
+  </div>
+
+  <!-- Viewfinder -->
+  <div id="viewfinder-wrap">
+    <div id="viewfinder" id="clickarea">
+      <div class="crosshair"></div>
+      <div id="target-dso"></div>
+      <div id="dso-label"></div>
+      <div id="exposure-bar-wrap"><div id="exposure-bar"></div></div>
+      <div id="clouds-overlay"></div>
+      <div id="rain-overlay"></div>
+      <div id="guiding-indicator">GUIDING OK</div>
+      <div id="wifi-indicator">WiFi OK</div>
+    </div>
+  </div>
+
+  <!-- Event Log -->
+  <div id="event-log">
+    <div class="log-entry good">Welcome, astrophotographer! Tap the viewfinder to collect photons!</div>
+  </div>
+
+  <!-- Bottom Panel -->
+  <div id="bottom-panel">
+    <div id="upgrades-title">Equipment Upgrades</div>
+    <div id="upgrades"></div>
+  </div>
+</div>
+
+<!-- Gallery Popup -->
+<div id="gallery-popup">
+  <h2 id="popup-title"></h2>
+  <canvas id="popup-img" class="captured-img" width="180" height="180"></canvas>
+  <p id="popup-desc"></p>
+  <p id="popup-stats"></p>
+  <div id="gallery-grid"></div>
+  <button id="popup-close">Continue Imaging</button>
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+//  ASTROCLICKER - The Astrophotography Game
+// ═══════════════════════════════════════════
+
+// ── Deep Sky Objects Catalog ──
+const DSO_CATALOG = [
+  { name: "M31 Andromeda", type: "galaxy", color: "#e8d080", size: 70, photonsNeeded: 50, desc: "The nearest large galaxy, 2.5M light-years away" },
+  { name: "M42 Orion Nebula", type: "nebula", color: "#ff6688", size: 65, photonsNeeded: 80, desc: "The great nebula in Orion's sword" },
+  { name: "M45 Pleiades", type: "cluster", color: "#aaccff", size: 60, photonsNeeded: 40, desc: "The Seven Sisters open cluster" },
+  { name: "M51 Whirlpool", type: "galaxy", color: "#c0a0d0", size: 50, photonsNeeded: 150, desc: "A stunning face-on spiral galaxy" },
+  { name: "NGC 7000 N. America", type: "nebula", color: "#ff4444", size: 75, photonsNeeded: 200, desc: "Emission nebula shaped like North America" },
+  { name: "M27 Dumbbell", type: "nebula", color: "#66ddaa", size: 45, photonsNeeded: 120, desc: "A beautiful planetary nebula in Vulpecula" },
+  { name: "M81 Bode's Galaxy", type: "galaxy", color: "#d4b896", size: 55, photonsNeeded: 250, desc: "Grand design spiral in Ursa Major" },
+  { name: "M1 Crab Nebula", type: "nebula", color: "#ff8844", size: 40, photonsNeeded: 300, desc: "Supernova remnant from 1054 AD" },
+  { name: "M101 Pinwheel", type: "galaxy", color: "#b0c8e0", size: 65, photonsNeeded: 400, desc: "Face-on spiral, incredibly detailed" },
+  { name: "IC 1396 Elephant Trunk", type: "nebula", color: "#cc4466", size: 70, photonsNeeded: 500, desc: "Massive emission nebula with dark globules" },
+  { name: "M33 Triangulum", type: "galaxy", color: "#c4b0d8", size: 60, photonsNeeded: 600, desc: "Third-largest galaxy in Local Group" },
+  { name: "NGC 2244 Rosette", type: "nebula", color: "#ee5577", size: 68, photonsNeeded: 750, desc: "A cosmic rose blooming in Monoceros" },
+  { name: "M13 Hercules Cluster", type: "cluster", color: "#ffe8a0", size: 45, photonsNeeded: 350, desc: "The great globular cluster in Hercules" },
+  { name: "NGC 6992 Veil Nebula", type: "nebula", color: "#7788ff", size: 70, photonsNeeded: 900, desc: "Ancient supernova remnant, ghostly wisps" },
+  { name: "M104 Sombrero", type: "galaxy", color: "#e0c890", size: 50, photonsNeeded: 1100, desc: "Edge-on galaxy with prominent dust lane" },
+  { name: "SH2-129 Flying Bat", type: "nebula", color: "#9944aa", size: 60, photonsNeeded: 1500, desc: "Ultra-faint emission nebula + Squid Nebula" },
+];
+
+// ── Upgrades ──
+const UPGRADES = [
+  { id: "sensor", icon: "📷", name: "Sensor", desc: "Better camera sensor", baseCost: 15, costMul: 1.8, effect: "clickPower", baseVal: 1 },
+  { id: "mount", icon: "🔭", name: "Mount", desc: "Sturdier mount", baseCost: 40, costMul: 2.0, effect: "guidingResist", baseVal: 0.1 },
+  { id: "autoguider", icon: "🎯", name: "Autoguider", desc: "Auto photon collector", baseCost: 100, costMul: 2.2, effect: "autoPPS", baseVal: 1 },
+  { id: "dew", icon: "🌡️", name: "Dew Heater", desc: "Fights clouds & rain", baseCost: 60, costMul: 1.9, effect: "weatherResist", baseVal: 0.1 },
+  { id: "router", icon: "📡", name: "Router", desc: "Better WiFi", baseCost: 50, costMul: 1.85, effect: "wifiResist", baseVal: 0.1 },
+  { id: "filter", icon: "🔴", name: "NB Filter", desc: "More photons/click", baseCost: 200, costMul: 2.5, effect: "clickPower", baseVal: 2 },
+  { id: "obsy", icon: "🏠", name: "Observatory", desc: "Auto photons boost", baseCost: 500, costMul: 2.8, effect: "autoPPS", baseVal: 5 },
+  { id: "bortle", icon: "🌃", name: "Dark Site", desc: "Mega photon boost", baseCost: 2000, costMul: 3.0, effect: "clickPower", baseVal: 5 },
+];
+
+// ── Funny messages ──
+const CLOUD_MSGS = [
+  "Clouds rolled in! Your forecast app LIED! 😤",
+  "A wild cloud appears! It's super effective!",
+  "Who ordered the cumulus nimbus?!",
+  "Clear skies they said... Trust the forecast they said...",
+  "Plot twist: Mother Nature hates your hobby",
+  "Cloud: 'I'm about to end this man's whole session'",
+];
+const RAIN_MSGS = [
+  "IT'S RAINING! Save the equipment!! 🌧️",
+  "Rain detected! Your gear is crying!",
+  "Noah called, he wants his weather back",
+  "Rain: because clouds weren't enough suffering",
+  "Moisture alert! Your OTA is taking a shower!",
+];
+const GUIDE_MSGS = [
+  "Guiding error! Stars look like eggs! 🥚",
+  "Guide star lost! Everything is streaks!",
+  "PHD2: 'lol good luck' *disconnects*",
+  "Your mount just had a mental breakdown",
+  "Guiding went haywire! Is that a star or a UFO trail?",
+  "Dec backlash says hello! 👋",
+];
+const WIFI_MSGS = [
+  "WiFi dropped! Can't control the mount! 📡",
+  "Connection lost! NINA is panicking!",
+  "WiFi: 'I exist only to cause suffering'",
+  "Your Raspberry Pi lost the plot again",
+  "Network timeout! Did a neighbor microwave popcorn?",
+  "SSH session frozen. Classic.",
+];
+const CAPTURE_MSGS = [
+  "Incredible shot captured! 🌌",
+  "The photons were worth the suffering!",
+  "Gallery-worthy masterpiece!",
+  "Your astro group will be jealous!",
+  "That's going on the Instagram!",
+];
+
+// ── Game State ──
+const state = {
+  photons: 0,
+  totalPhotons: 0,
+  night: 1,
+  clickPower: 1,
+  autoPPS: 0,
+  guidingResist: 0,
+  weatherResist: 0,
+  wifiResist: 0,
+  upgradeLevels: {},
+  currentDSO: 0,
+  exposure: 0,
+  gallery: [],
+  problems: { clouds: false, rain: false, guiding: false, wifi: false },
+  paused: false,
+  comboCount: 0,
+  comboTimer: null,
+  lastClick: 0,
+};
+
+UPGRADES.forEach(u => state.upgradeLevels[u.id] = 0);
+
+// ── DOM refs ──
+const $ = id => document.getElementById(id);
+const photonsDisplay = $('photons-display');
+const ppsDisplay = $('pps-display');
+const galleryCount = $('gallery-count');
+const nightDisplay = $('night-display');
+const viewfinder = $('viewfinder');
+const targetDSO = $('target-dso');
+const dsoLabel = $('dso-label');
+const exposureBar = $('exposure-bar');
+const cloudsOverlay = $('clouds-overlay');
+const rainOverlay = $('rain-overlay');
+const guidingInd = $('guiding-indicator');
+const wifiInd = $('wifi-indicator');
+const eventLog = $('event-log');
+const upgradesDiv = $('upgrades');
+const galleryPopup = $('gallery-popup');
+const popupTitle = $('popup-title');
+const popupImg = $('popup-img');
+const popupDesc = $('popup-desc');
+const popupStats = $('popup-stats');
+const popupClose = $('popup-close');
+const galleryGrid = $('gallery-grid');
+
+// ── Starfield background ──
+function initStarfield() {
+  const canvas = $('starfield');
+  const ctx = canvas.getContext('2d');
+  function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+  resize(); window.addEventListener('resize', resize);
+
+  const stars = Array.from({ length: 200 }, () => ({
+    x: Math.random() * canvas.width,
+    y: Math.random() * canvas.height,
+    r: Math.random() * 1.5 + 0.3,
+    a: Math.random(),
+    speed: Math.random() * 0.005 + 0.002,
+    phase: Math.random() * Math.PI * 2,
+  }));
+
+  function draw(t) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    stars.forEach(s => {
+      const alpha = 0.3 + 0.7 * (0.5 + 0.5 * Math.sin(t * s.speed + s.phase));
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(200, 210, 255, ${alpha})`;
+      ctx.fill();
+    });
+    requestAnimationFrame(draw);
+  }
+  requestAnimationFrame(draw);
+}
+
+// ── Viewfinder stars ──
+function populateVFStars() {
+  viewfinder.querySelectorAll('.vf-star').forEach(e => e.remove());
+  for (let i = 0; i < 30; i++) {
+    const star = document.createElement('div');
+    star.className = 'vf-star';
+    const size = Math.random() * 2 + 1;
+    star.style.cssText = `
+      width: ${size}px; height: ${size}px;
+      top: ${Math.random() * 90 + 5}%;
+      left: ${Math.random() * 90 + 5}%;
+      animation-delay: ${Math.random() * 3}s;
+      animation-duration: ${2 + Math.random() * 3}s;
+    `;
+    viewfinder.appendChild(star);
+  }
+}
+
+// ── Draw DSO on canvas ──
+function drawDSO(canvas, dso, quality) {
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+
+  // Background
+  ctx.fillStyle = '#060612';
+  ctx.fillRect(0, 0, w, h);
+
+  // Background stars
+  for (let i = 0; i < 40; i++) {
+    ctx.beginPath();
+    ctx.arc(Math.random() * w, Math.random() * h, Math.random() * 1 + 0.3, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(200, 210, 255, ${Math.random() * 0.5 + 0.2})`;
+    ctx.fill();
+  }
+
+  const cx = w / 2, cy = h / 2;
+  const alpha = Math.min(quality / 80, 1);
+
+  if (dso.type === 'galaxy') {
+    // Draw spiral galaxy
+    for (let ring = 0; ring < 8; ring++) {
+      const r = (dso.size / 200) * w * (ring / 8) * (0.6 + quality / 200);
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, r, r * 0.4, Math.PI * 0.2, 0, Math.PI * 2);
+      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+      grad.addColorStop(0, dso.color + 'cc');
+      grad.addColorStop(0.6, dso.color + '44');
+      grad.addColorStop(1, 'transparent');
+      ctx.fillStyle = grad;
+      ctx.globalAlpha = alpha * (1 - ring / 10);
+      ctx.fill();
+    }
+    // Bright core
+    ctx.beginPath();
+    ctx.arc(cx, cy, w * 0.05, 0, Math.PI * 2);
+    ctx.fillStyle = '#fff8e0';
+    ctx.globalAlpha = alpha * 0.8;
+    ctx.fill();
+  } else if (dso.type === 'nebula') {
+    // Draw nebula blobs
+    for (let i = 0; i < 12; i++) {
+      const angle = (i / 12) * Math.PI * 2 + Math.sin(i) * 0.5;
+      const dist = (Math.random() * 0.3 + 0.1) * w * (dso.size / 150);
+      const bx = cx + Math.cos(angle) * dist;
+      const by = cy + Math.sin(angle) * dist;
+      const br = (Math.random() * 0.15 + 0.08) * w;
+      const grad = ctx.createRadialGradient(bx, by, 0, bx, by, br);
+      grad.addColorStop(0, dso.color + 'aa');
+      grad.addColorStop(0.5, dso.color + '33');
+      grad.addColorStop(1, 'transparent');
+      ctx.beginPath();
+      ctx.arc(bx, by, br, 0, Math.PI * 2);
+      ctx.fillStyle = grad;
+      ctx.globalAlpha = alpha * 0.7;
+      ctx.fill();
+    }
+  } else {
+    // Cluster
+    for (let i = 0; i < 50; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = Math.random() * w * 0.3 * (dso.size / 120);
+      const sx = cx + Math.cos(angle) * dist;
+      const sy = cy + Math.sin(angle) * dist;
+      const sr = Math.random() * 2 + 0.8;
+      ctx.beginPath();
+      ctx.arc(sx, sy, sr, 0, Math.PI * 2);
+      ctx.fillStyle = i < 10 ? dso.color : '#ffe8c0';
+      ctx.globalAlpha = alpha * (0.5 + Math.random() * 0.5);
+      ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+// ── Render DSO in viewfinder ──
+function renderCurrentDSO() {
+  const dso = DSO_CATALOG[state.currentDSO];
+  dsoLabel.textContent = dso.name;
+
+  // Create a canvas for DSO
+  let dsoCanvas = targetDSO.querySelector('canvas');
+  if (!dsoCanvas) {
+    dsoCanvas = document.createElement('canvas');
+    dsoCanvas.width = 160; dsoCanvas.height = 160;
+    dsoCanvas.style.cssText = 'width:100%;height:100%;border-radius:50%;';
+    targetDSO.innerHTML = '';
+    targetDSO.appendChild(dsoCanvas);
+  }
+  targetDSO.style.width = dso.size + 'px';
+  targetDSO.style.height = dso.size + 'px';
+  targetDSO.style.opacity = '1';
+
+  drawDSO(dsoCanvas, dso, (state.exposure / dso.photonsNeeded) * 100);
+}
+
+// ── Update exposure bar display ──
+function updateExposureDisplay() {
+  const dso = DSO_CATALOG[state.currentDSO];
+  const pct = Math.min((state.exposure / dso.photonsNeeded) * 100, 100);
+  exposureBar.style.width = pct + '%';
+
+  // Re-draw DSO with current quality
+  renderCurrentDSO();
+}
+
+// ── Log events ──
+function log(msg, type = '') {
+  const div = document.createElement('div');
+  div.className = 'log-entry ' + type;
+  div.textContent = '> ' + msg;
+  eventLog.prepend(div);
+  while (eventLog.children.length > 20) eventLog.lastChild.remove();
+}
+
+// ── Floating text ──
+function floatText(x, y, text, type = '') {
+  const el = document.createElement('div');
+  el.className = 'float-text ' + type;
+  el.textContent = text;
+  el.style.left = x + 'px';
+  el.style.top = y + 'px';
+  viewfinder.parentElement.appendChild(el);
+  setTimeout(() => el.remove(), 1000);
+}
+
+// ── Format number ──
+function fmt(n) {
+  if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B';
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+  return Math.floor(n).toString();
+}
+
+// ── Update displays ──
+function updateUI() {
+  photonsDisplay.textContent = fmt(state.photons);
+  ppsDisplay.textContent = fmt(state.autoPPS);
+  galleryCount.textContent = state.gallery.length + '/' + DSO_CATALOG.length;
+  nightDisplay.textContent = state.night;
+  updateExposureDisplay();
+  updateUpgradeButtons();
+}
+
+// ── Upgrade buttons ──
+function renderUpgrades() {
+  upgradesDiv.innerHTML = '';
+  UPGRADES.forEach(u => {
+    const btn = document.createElement('button');
+    btn.className = 'upgrade-btn';
+    btn.id = 'upg-' + u.id;
+    btn.innerHTML = `
+      <span class="icon">${u.icon}</span>
+      <span class="name">${u.name}</span>
+      <span class="cost" id="cost-${u.id}"></span>
+      <span class="level" id="lvl-${u.id}"></span>
+    `;
+    btn.addEventListener('click', () => buyUpgrade(u));
+    upgradesDiv.appendChild(btn);
+  });
+  updateUpgradeButtons();
+}
+
+function getUpgradeCost(u) {
+  return Math.floor(u.baseCost * Math.pow(u.costMul, state.upgradeLevels[u.id]));
+}
+
+function updateUpgradeButtons() {
+  UPGRADES.forEach(u => {
+    const btn = $('upg-' + u.id);
+    const cost = getUpgradeCost(u);
+    const costEl = $('cost-' + u.id);
+    const lvlEl = $('lvl-' + u.id);
+    if (costEl) costEl.textContent = fmt(cost);
+    if (lvlEl) lvlEl.textContent = 'Lv.' + state.upgradeLevels[u.id];
+    if (btn) {
+      btn.disabled = state.photons < cost;
+      btn.classList.toggle('affordable', state.photons >= cost);
+    }
+  });
+}
+
+function buyUpgrade(u) {
+  const cost = getUpgradeCost(u);
+  if (state.photons < cost) return;
+
+  state.photons -= cost;
+  state.upgradeLevels[u.id]++;
+
+  // Apply effect
+  switch (u.effect) {
+    case 'clickPower':
+      state.clickPower += u.baseVal;
+      break;
+    case 'autoPPS':
+      state.autoPPS += u.baseVal;
+      break;
+    case 'guidingResist':
+      state.guidingResist = Math.min(state.guidingResist + u.baseVal, 0.9);
+      break;
+    case 'weatherResist':
+      state.weatherResist = Math.min(state.weatherResist + u.baseVal, 0.9);
+      break;
+    case 'wifiResist':
+      state.wifiResist = Math.min(state.wifiResist + u.baseVal, 0.9);
+      break;
+  }
+
+  log(`Upgraded ${u.name} to Lv.${state.upgradeLevels[u.id]}!`, 'good');
+  updateUI();
+}
+
+// ── Click handler ──
+viewfinder.addEventListener('click', (e) => {
+  if (state.paused) return;
+
+  const rect = viewfinder.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+
+  // Combo system
+  const now = Date.now();
+  if (now - state.lastClick < 400) {
+    state.comboCount++;
+  } else {
+    state.comboCount = 1;
+  }
+  state.lastClick = now;
+  clearTimeout(state.comboTimer);
+  state.comboTimer = setTimeout(() => { state.comboCount = 0; }, 600);
+
+  const comboMulti = 1 + Math.min(state.comboCount, 20) * 0.1;
+
+  let amount = state.clickPower * comboMulti;
+  let isCrit = false;
+
+  // Random crit (5% chance)
+  if (Math.random() < 0.05) {
+    amount *= 3;
+    isCrit = true;
+  }
+
+  // If problems active, reduce yield
+  if (state.problems.clouds) amount *= 0.3;
+  if (state.problems.rain) amount *= 0.1;
+  if (state.problems.guiding) amount *= 0.4;
+  if (state.problems.wifi) amount *= 0.0;
+
+  amount = Math.max(Math.floor(amount), state.problems.wifi ? 0 : 1);
+
+  state.photons += amount;
+  state.totalPhotons += amount;
+  state.exposure += amount;
+
+  // Float text
+  const vfRect = viewfinder.parentElement.getBoundingClientRect();
+  const fx = e.clientX - vfRect.left;
+  const fy = e.clientY - vfRect.top;
+
+  if (state.problems.wifi) {
+    floatText(fx, fy, 'NO WiFi!', 'fail');
+  } else if (amount === 0) {
+    floatText(fx, fy, 'BLOCKED!', 'fail');
+  } else if (isCrit) {
+    floatText(fx, fy, '+' + fmt(amount) + ' CRIT!', 'crit');
+  } else if (state.comboCount >= 5) {
+    floatText(fx, fy, '+' + fmt(amount) + ' x' + state.comboCount, 'crit');
+  } else {
+    floatText(fx, fy, '+' + fmt(amount), '');
+  }
+
+  // Check DSO completion
+  const dso = DSO_CATALOG[state.currentDSO];
+  if (state.exposure >= dso.photonsNeeded) {
+    captureComplete(dso);
+  }
+
+  updateUI();
+});
+
+// ── DSO capture complete ──
+function captureComplete(dso) {
+  state.gallery.push({
+    name: dso.name,
+    type: dso.type,
+    color: dso.color,
+    size: dso.size,
+    night: state.night,
+  });
+
+  log(CAPTURE_MSGS[Math.floor(Math.random() * CAPTURE_MSGS.length)], 'great');
+  state.paused = true;
+
+  // Show popup
+  popupTitle.textContent = dso.name + ' Captured!';
+  drawDSO(popupImg, dso, 100);
+  popupDesc.textContent = dso.desc;
+  popupStats.textContent = `Captured on Night ${state.night} | Gallery: ${state.gallery.length}/${DSO_CATALOG.length}`;
+
+  // Update gallery grid
+  galleryGrid.innerHTML = '';
+  state.gallery.forEach(g => {
+    const thumb = document.createElement('div');
+    thumb.className = 'gallery-thumb';
+    const c = document.createElement('canvas');
+    c.width = 100; c.height = 100;
+    drawDSO(c, g, 100);
+    thumb.appendChild(c);
+    const label = document.createElement('div');
+    label.className = 'thumb-label';
+    label.textContent = g.name;
+    thumb.appendChild(label);
+    galleryGrid.appendChild(thumb);
+  });
+
+  galleryPopup.classList.add('show');
+}
+
+popupClose.addEventListener('click', () => {
+  galleryPopup.classList.remove('show');
+  state.paused = false;
+  nextDSO();
+});
+
+function nextDSO() {
+  if (state.currentDSO < DSO_CATALOG.length - 1) {
+    state.currentDSO++;
+  } else {
+    state.currentDSO = 0;
+    state.night++;
+    log(`Night ${state.night} begins! Objects are harder but you're experienced!`, 'great');
+    // Scale up requirements
+    DSO_CATALOG.forEach(d => d.photonsNeeded = Math.floor(d.photonsNeeded * 1.5));
+  }
+  state.exposure = 0;
+  renderCurrentDSO();
+  updateUI();
+}
+
+// ══════════════════════════════
+//  Problem System
+// ══════════════════════════════
+function spawnProblem(type) {
+  if (state.problems[type]) return;
+
+  // Resistance check
+  let resist = 0;
+  if (type === 'clouds' || type === 'rain') resist = state.weatherResist;
+  if (type === 'guiding') resist = state.guidingResist;
+  if (type === 'wifi') resist = state.wifiResist;
+  if (Math.random() < resist) {
+    const resistMsgs = {
+      clouds: 'Dew heater fought off the clouds!',
+      rain: 'Observatory roof protected from rain!',
+      guiding: 'Autoguider corrected the error!',
+      wifi: 'Router maintained the connection!',
+    };
+    log(resistMsgs[type], 'good');
+    return;
+  }
+
+  state.problems[type] = true;
+
+  // Visual effects
+  if (type === 'clouds') {
+    cloudsOverlay.style.opacity = '1';
+    log(CLOUD_MSGS[Math.floor(Math.random() * CLOUD_MSGS.length)], 'bad');
+  }
+  if (type === 'rain') {
+    rainOverlay.style.opacity = '1';
+    spawnRaindrops();
+    log(RAIN_MSGS[Math.floor(Math.random() * RAIN_MSGS.length)], 'bad');
+  }
+  if (type === 'guiding') {
+    guidingInd.textContent = 'GUIDE ERR!';
+    guidingInd.classList.add('error');
+    targetDSO.classList.add('shaking');
+    log(GUIDE_MSGS[Math.floor(Math.random() * GUIDE_MSGS.length)], 'bad');
+  }
+  if (type === 'wifi') {
+    wifiInd.textContent = 'NO WiFi!';
+    wifiInd.classList.add('error');
+    log(WIFI_MSGS[Math.floor(Math.random() * WIFI_MSGS.length)], 'bad');
+  }
+
+  // Spawn fix button
+  spawnFixButton(type);
+}
+
+function spawnFixButton(type) {
+  const labels = {
+    clouds: '☁️ Blow Clouds Away!',
+    rain: '☔ Cover Equipment!',
+    guiding: '🎯 Recalibrate Guide!',
+    wifi: '📡 Reconnect WiFi!',
+  };
+
+  const btn = document.createElement('button');
+  btn.className = 'problem-btn';
+  btn.textContent = labels[type];
+  btn.dataset.type = type;
+
+  // Random position within viewfinder area
+  const wrap = viewfinder.parentElement;
+  const wrapRect = wrap.getBoundingClientRect();
+  btn.style.left = (Math.random() * 60 + 20) + '%';
+  btn.style.top = (Math.random() * 40 + 10) + '%';
+
+  let clicksNeeded = type === 'rain' ? 5 : 3;
+  let clicks = 0;
+
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    clicks++;
+    btn.textContent = labels[type] + ` (${clicksNeeded - clicks})`;
+
+    if (clicks >= clicksNeeded) {
+      fixProblem(type);
+      btn.remove();
+    } else {
+      btn.style.left = (Math.random() * 60 + 20) + '%';
+      btn.style.top = (Math.random() * 40 + 10) + '%';
+    }
+  });
+
+  viewfinder.parentElement.appendChild(btn);
+
+  // Auto-remove after timeout if not fixed
+  setTimeout(() => {
+    if (state.problems[type]) {
+      fixProblem(type);
+      btn.remove();
+    }
+  }, 15000);
+}
+
+function fixProblem(type) {
+  state.problems[type] = false;
+
+  if (type === 'clouds') {
+    cloudsOverlay.style.opacity = '0';
+    log('Clouds cleared! Back to imaging!', 'good');
+  }
+  if (type === 'rain') {
+    rainOverlay.style.opacity = '0';
+    log('Rain stopped! Equipment is safe!', 'good');
+  }
+  if (type === 'guiding') {
+    guidingInd.textContent = 'GUIDING OK';
+    guidingInd.classList.remove('error');
+    targetDSO.classList.remove('shaking');
+    log('Guiding recalibrated! Stars are round again!', 'good');
+  }
+  if (type === 'wifi') {
+    wifiInd.textContent = 'WiFi OK';
+    wifiInd.classList.remove('error');
+    log('WiFi reconnected! NINA says hi!', 'good');
+  }
+}
+
+function spawnRaindrops() {
+  rainOverlay.innerHTML = '';
+  for (let i = 0; i < 40; i++) {
+    const drop = document.createElement('div');
+    drop.className = 'raindrop';
+    drop.style.left = Math.random() * 100 + '%';
+    drop.style.height = (Math.random() * 15 + 10) + 'px';
+    drop.style.animationDuration = (Math.random() * 0.5 + 0.3) + 's';
+    drop.style.animationDelay = Math.random() * 2 + 's';
+    rainOverlay.appendChild(drop);
+  }
+}
+
+// ── Problem scheduler ──
+function scheduleProblem() {
+  const baseInterval = Math.max(3000, 8000 - state.night * 200);
+  const interval = baseInterval + Math.random() * 5000;
+
+  setTimeout(() => {
+    if (!state.paused) {
+      const types = ['clouds', 'guiding', 'wifi', 'clouds', 'guiding'];
+      // Rain is rarer
+      if (Math.random() < 0.2) types.push('rain');
+      const type = types[Math.floor(Math.random() * types.length)];
+      spawnProblem(type);
+    }
+    scheduleProblem();
+  }, interval);
+}
+
+// ── Auto photon ticker ──
+function autoTick() {
+  if (!state.paused && state.autoPPS > 0) {
+    let amount = state.autoPPS;
+    if (state.problems.clouds) amount *= 0.3;
+    if (state.problems.rain) amount *= 0.1;
+    if (state.problems.guiding) amount *= 0.4;
+    if (state.problems.wifi) amount *= 0;
+    amount = Math.floor(amount);
+
+    if (amount > 0) {
+      state.photons += amount;
+      state.totalPhotons += amount;
+      state.exposure += amount;
+
+      const dso = DSO_CATALOG[state.currentDSO];
+      if (state.exposure >= dso.photonsNeeded) {
+        captureComplete(dso);
+      }
+    }
+  }
+  updateUI();
+}
+
+// ══════════════════════════════
+//  Initialize
+// ══════════════════════════════
+function init() {
+  initStarfield();
+  populateVFStars();
+  renderUpgrades();
+  renderCurrentDSO();
+  updateUI();
+
+  // Auto ticker every second
+  setInterval(autoTick, 1000);
+
+  // Start problem scheduler
+  setTimeout(scheduleProblem, 5000);
+
+  log('Night 1 begins. Target: ' + DSO_CATALOG[0].name, 'good');
+  log('Tap the viewfinder to collect photons!', '');
+}
+
+init();
+</script>
+</body>
+</html>
